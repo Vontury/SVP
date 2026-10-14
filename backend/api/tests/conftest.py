@@ -1,6 +1,10 @@
 import time
 from types import SimpleNamespace
 
+import contextlib
+
+from psycopg.errors import UniqueViolation
+
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -68,15 +72,24 @@ def make_token(private_key):
 class FakeConn:
     def __init__(self, row):
         self.row = row
+        self.queue = []  
+        self.fail_participant_inserts = 0
         self.calls = []
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
+        if self.fail_participant_inserts and "insert into public.participants" in sql:
+            self.fail_participant_inserts -= 1
+            raise UniqueViolation("duplicate study code")
         return self
 
     def fetchone(self):
+        if self.queue:
+            return self.queue.pop(0)
         return self.row
 
+    def transaction(self):
+        return contextlib.nullcontext()
 
 @pytest.fixture
 def fake_db():

@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI
 from app.config import get_settings
 from app.db import close_pool, get_conn, init_pool
 from app.participants import get_current_participant
+from app.study import router as study_router
 
 
 @asynccontextmanager
@@ -15,6 +16,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SVP API", lifespan=lifespan)
+app.include_router(study_router)
 
 
 @app.get("/api/health")

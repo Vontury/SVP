@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     port: int = 8083
     supabase_url: str
     database_url: str
+    consent_version: str = "draft-1"
+    initial_phase_id: str = "BASIC_PHASE"
 
     @property
     def jwt_issuer(self) -> str:
