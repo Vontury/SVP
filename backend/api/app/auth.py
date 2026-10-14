@@ -7,6 +7,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 
 from app.config import Settings, get_settings
+import logging
+
+logger = logging.getLogger("app.auth")
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -47,6 +50,7 @@ def get_current_user(
             issuer=settings.jwt_issuer,
             options={"require": ["exp", "sub", "iss", "aud"]},
         )
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as exc:
+        logger.warning("JWT rejected: %s", type(exc).__name__)
         raise _unauthorized()
     return CurrentUser(id=claims["sub"], role=claims.get("role", ""))
