@@ -10,6 +10,14 @@ PARTICIPANT_SQL = """
     where auth_user_id = %s::uuid
 """
 
+_CURRENT_CONDITION = """
+    select condition, valid_from
+    from public.study_condition_history
+    where participant_id = %s::uuid
+      and valid_from <= now()
+      and (valid_to is null or valid_to > now())
+"""
+
 
 def get_current_participant(
     user: CurrentUser = Depends(get_current_user),
@@ -22,3 +30,15 @@ def get_current_participant(
             detail="No participant profile for this account",
         )
     return row
+
+def get_active_participant(participant: dict = Depends(get_current_participant)) -> dict:
+    if participant["status"] != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Participant is not active",
+        )
+    return participant
+
+
+def current_condition_row(conn, participant_id) -> dict | None:
+    return conn.execute(_CURRENT_CONDITION, (participant_id,)).fetchone()

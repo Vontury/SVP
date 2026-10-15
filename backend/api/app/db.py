@@ -28,3 +28,8 @@ def get_conn():
         raise RuntimeError("Database pool is not initialised")
     with _pool.connection() as conn:
         yield conn
+
+def connection():
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialised")
+    return _pool.connection()

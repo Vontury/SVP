@@ -7,8 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.auth import CurrentUser, get_current_user
 from app.config import Settings, get_settings
 from app.db import get_conn
-from app.participants import PARTICIPANT_SQL, get_current_participant
-
+from app.participants import PARTICIPANT_SQL, current_condition_row, get_current_participant
 router = APIRouter(prefix="/api")
 
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -30,14 +29,6 @@ _INSERT_CONDITION = """
     insert into public.study_condition_history
         (participant_id, condition, phase_id, valid_from)
     values (%s::uuid, 'BASIC', %s, now())
-"""
-
-_CURRENT_CONDITION = """
-    select condition, valid_from
-    from public.study_condition_history
-    where participant_id = %s::uuid
-      and valid_from <= now()
-      and (valid_to is null or valid_to > now())
 """
 
 
@@ -93,7 +84,7 @@ def my_condition(
     participant: dict = Depends(get_current_participant),
     conn=Depends(get_conn),
 ):
-    row = conn.execute(_CURRENT_CONDITION, (participant["id"],)).fetchone()
+    row = current_condition_row(conn, participant["id"])    
     if row is None:
         raise HTTPException(status_code=409, detail="No active study condition")
     return {"condition": row["condition"], "since": row["valid_from"]}

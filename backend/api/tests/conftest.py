@@ -22,7 +22,7 @@ USER_ID = "11111111-1111-1111-1111-111111111111"
 SAMPLE_PARTICIPANT = {
     "id": "22222222-2222-2222-2222-222222222222",
     "study_code": "S001",
-    "status": "TEST",
+    "status": "ACTIVE",
     "pilot_flag": False,
     "primary_device": None,
     "region_code": None,
@@ -75,6 +75,7 @@ class FakeConn:
         self.queue = []  
         self.fail_participant_inserts = 0
         self.calls = []
+        self.all_rows = []
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
@@ -90,6 +91,9 @@ class FakeConn:
 
     def transaction(self):
         return contextlib.nullcontext()
+
+    def fetchall(self):
+        return self.all_rows
 
 @pytest.fixture
 def fake_db():
