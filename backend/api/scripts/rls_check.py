@@ -28,6 +28,11 @@ WRITE_ATTEMPTS = [
     "insert into public.survey_answers default values",
     "delete from public.survey_answers",
 ]
+BACKEND_ONLY = [
+    "videos", "ai_classification_runs", "categories", "category_label_mappings",
+    "study_condition_history", "app_sessions", "interaction_events", "api_tokens",
+    "reason_responses",
+]
 NO_USER = "00000000-0000-0000-0000-000000000000"
 
 failures = 0
