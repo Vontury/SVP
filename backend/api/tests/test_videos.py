@@ -206,3 +206,48 @@ def test_get_video_not_found_is_404(client, make_token, fake_db):
 def test_get_video_with_malformed_id_is_422(client, make_token):
     r = client.get("/api/videos/not-a-uuid", headers=bearer(make_token()))
     assert r.status_code == 422
+
+
+def test_retry_requires_token(client):
+    assert client.post(f"/api/videos/{VIDEO_ID}/retry").status_code == 401
+
+
+def test_retry_failed_item_is_requeued(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, video_row(processing_status="PROCESSING")]
+    r = client.post(f"/api/videos/{VIDEO_ID}/retry", headers=bearer(make_token()))
+    assert r.status_code == 202
+    assert r.json()["processing_status"] == "PROCESSING"
+    assert "category_id" not in r.json()
+    (update,) = sql_calls(fake_db, "set processing_status = 'PROCESSING'")
+    assert (str(update[1][0]), update[1][1]) == (VIDEO_ID, PID)
+    assert sql_calls(fake_db, "insert into public.videos") == []
+
+
+def test_retry_already_processing_changes_nothing(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, None, video_row(processing_status="PROCESSING")]
+    r = client.post(f"/api/videos/{VIDEO_ID}/retry", headers=bearer(make_token()))
+    assert r.status_code == 200
+
+
+def test_retry_completed_item_is_409(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, None, video_row(processing_status="COMPLETED")]
+    r = client.post(f"/api/videos/{VIDEO_ID}/retry", headers=bearer(make_token()))
+    assert r.status_code == 409
+    assert r.json() == {"detail": {"code": "NOT_RETRYABLE"}}
+
+
+def test_retry_missing_or_foreign_item_is_404(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, None, None]
+    r = client.post(f"/api/videos/{VIDEO_ID}/retry", headers=bearer(make_token()))
+    assert r.status_code == 404
+
+
+def test_retry_withdrawn_participant_is_403(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT, status="WITHDRAWN")]
+    r = client.post(f"/api/videos/{VIDEO_ID}/retry", headers=bearer(make_token()))
+    assert r.status_code == 403
+
+
+def test_retry_with_malformed_id_is_422(client, make_token):
+    r = client.post("/api/videos/not-a-uuid/retry", headers=bearer(make_token()))
+    assert r.status_code == 422

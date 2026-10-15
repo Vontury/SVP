@@ -46,6 +46,19 @@ _GET_VIDEO = f"""
     where id = %s::uuid and participant_id = %s::uuid and deleted_at is null
 """
 
+_RETRY_VIDEO = f"""
+    update public.videos
+    set processing_status = 'PROCESSING',
+        processing_error_code = null,
+        retry_count = 0,
+        next_retry_at = null
+    where id = %s::uuid
+      and participant_id = %s::uuid
+      and deleted_at is null
+      and processing_status = 'FAILED'
+    returning {_VIDEO_COLUMNS}
+"""
+
 _FULL_ONLY_FIELDS = {"category_id"}
 
 
@@ -161,3 +174,24 @@ def get_video(
     if row is None:
         raise HTTPException(status_code=404, detail="Not found")
     return _present(row, condition)
+
+@router.post("/videos/{video_id}/retry")
+def retry_video(
+    video_id: uuid.UUID,
+    response: Response,
+    participant: dict = Depends(get_active_participant),
+    conn=Depends(get_conn),
+):
+    condition = _current_condition(conn, participant["id"])
+
+    retried = conn.execute(_RETRY_VIDEO, (video_id, participant["id"])).fetchone()
+    if retried is not None:
+        response.status_code = 202
+        return _present(retried, condition)
+
+    current = conn.execute(_GET_VIDEO, (video_id, participant["id"])).fetchone()
+    if current is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if current["processing_status"] == "PROCESSING":
+        return _present(current, condition)
+    raise HTTPException(status_code=409, detail={"code": "NOT_RETRYABLE"})
