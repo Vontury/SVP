@@ -4,6 +4,11 @@ from psycopg_pool import ConnectionPool
 _pool: ConnectionPool | None = None
 
 
+def _configure(conn):
+    conn.execute("set idle_in_transaction_session_timeout = '120s'")
+    conn.execute("set lock_timeout = '5s'")
+    conn.commit()
+
 def init_pool(dsn: str) -> None:
     global _pool
     _pool = ConnectionPool(
@@ -12,6 +17,7 @@ def init_pool(dsn: str) -> None:
         max_size=5,
         kwargs={"row_factory": dict_row},
         open=True,
+        configure=_configure,
     )
     _pool.wait(timeout=15)
 
