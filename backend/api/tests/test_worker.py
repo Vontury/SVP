@@ -141,7 +141,7 @@ def test_stuck_items_are_failed_and_logged(worker_db):
         {"id": JOB_ID, "participant_id": PID, "last_attempt_at": ATTEMPT_AT},
         {"id": OTHER_JOB_ID, "participant_id": PID, "last_attempt_at": ATTEMPT_AT},
     ]
-    worker_db.queue = [{"condition": "BASIC"}, {"condition": "BASIC"}]
+    worker_db.queue = [{"condition": "BASIC"}, {"id": "e1"}, {"condition": "BASIC"}, {"id": "e2"}]    
     assert worker.reap_stuck() == 2
     events = sql_calls(worker_db, EVENT_INSERT)
     assert len(events) == 2

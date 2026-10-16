@@ -2,10 +2,13 @@ import json
 
 _INSERT_EVENT = """
     insert into public.interaction_events
-        (participant_id, video_id, event_type, occurred_at, source, device_type,
-         condition_at_event, idempotency_key, payload)
-    values (%s::uuid, %s::uuid, %s, now(), %s, %s, %s, %s, %s::jsonb)
+        (participant_id, video_id, event_type, source, device_type,
+         condition_at_event, idempotency_key, payload,
+         occurred_at, session_id, source_block)
+    values (%s::uuid, %s::uuid, %s, %s, %s, %s, %s, %s::jsonb,
+            coalesce(%s::timestamptz, now()), %s::uuid, %s)
     on conflict (participant_id, idempotency_key) do nothing
+    returning id
 """
 
 
@@ -20,8 +23,11 @@ def record_event(
     source=None,
     device_type=None,
     payload=None,
+    occurred_at=None,
+    session_id=None,
+    source_block=None,
 ):
-    conn.execute(
+    inserted = conn.execute(
         _INSERT_EVENT,
         (
             participant_id,
@@ -32,5 +38,9 @@ def record_event(
             condition,
             idempotency_key,
             json.dumps(payload or {}, sort_keys=True),
+            occurred_at,
+            session_id,
+            source_block,
         ),
-    )
+    ).fetchone()
+    return inserted is not None

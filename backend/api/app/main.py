@@ -8,6 +8,7 @@ from app.participants import get_current_participant
 from app.study import router as study_router
 from app.videos import router as videos_router
 from app.worker import run_forever
+from app.events_api import router as events_router
 
 
 @asynccontextmanager
@@ -24,6 +25,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SVP API", lifespan=lifespan)
 app.include_router(study_router)
 app.include_router(videos_router)
+app.include_router(events_router)
 
 
 @app.get("/api/health")
