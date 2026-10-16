@@ -21,7 +21,7 @@ _CURRENT_CONDITION = """
 
 def get_current_participant(
     user: CurrentUser = Depends(get_current_user),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ) -> dict:
     row = conn.execute(PARTICIPANT_SQL, (user.id,)).fetchone()
     if row is None:

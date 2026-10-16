@@ -110,7 +110,7 @@ def save_video(
     body: SaveRequest,
     response: Response,
     participant: dict = Depends(get_active_participant),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ):
     condition = _current_condition(conn, participant["id"])
 
@@ -174,7 +174,7 @@ def list_videos(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     participant: dict = Depends(get_current_participant),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ):
     condition = _current_condition(conn, participant["id"])
     rows = conn.execute(_LIST_VIDEOS, (participant["id"], limit, offset)).fetchall()
@@ -189,7 +189,7 @@ def list_videos(
 def get_video(
     video_id: uuid.UUID,
     participant: dict = Depends(get_current_participant),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ):
     condition = _current_condition(conn, participant["id"])
     row = conn.execute(_GET_VIDEO, (video_id, participant["id"])).fetchone()
@@ -202,7 +202,7 @@ def retry_video(
     video_id: uuid.UUID,
     response: Response,
     participant: dict = Depends(get_active_participant),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ):
     condition = _current_condition(conn, participant["id"])
 
@@ -239,7 +239,7 @@ def open_video(
     video_id: uuid.UUID,
     body: OpenRequest,
     participant: dict = Depends(get_active_participant),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ):
     condition = _current_condition(conn, participant["id"])
     event_type = "EXTERNAL_OPEN" if body.external else "OPENED"
@@ -271,7 +271,7 @@ def delete_video(
     video_id: uuid.UUID,
     body: DeleteRequest,
     participant: dict = Depends(get_active_participant),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ):
     condition = _current_condition(conn, participant["id"])
 

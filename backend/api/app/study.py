@@ -46,7 +46,7 @@ def accept_consent(
     body: ConsentRequest,
     response: Response,
     user: CurrentUser = Depends(get_current_user),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
     settings: Settings = Depends(get_settings),
 ):
     if body.consent_version != settings.consent_version:
@@ -82,7 +82,7 @@ def accept_consent(
 @router.get("/me/condition")
 def my_condition(
     participant: dict = Depends(get_current_participant),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ):
     row = current_condition_row(conn, participant["id"])    
     if row is None:

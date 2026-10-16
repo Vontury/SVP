@@ -46,7 +46,7 @@ def _reject(code, index):
 def record_batch(
     body: BatchRequest,
     participant: dict = Depends(get_active_participant),
-    conn=Depends(get_conn),
+    conn=Depends(get_conn, scope="function"),
 ):
     row = current_condition_row(conn, participant["id"])
     if row is None:

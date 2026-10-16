@@ -34,7 +34,7 @@ def health():
 
 
 @app.get("/api/health/db")
-def health_db(conn=Depends(get_conn)):
+def health_db(conn=Depends(get_conn, scope="function")):
     conn.execute("select 1")
     return {"db": "ok"}
 
