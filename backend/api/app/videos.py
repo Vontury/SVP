@@ -4,6 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from app.sessions import touch_session
 
 from app.db import get_conn
 from app.events import record_event
@@ -57,6 +58,27 @@ _RETRY_VIDEO = f"""
       and deleted_at is null
       and processing_status = 'FAILED'
     returning {_VIDEO_COLUMNS}
+"""
+
+_LOCK_VIDEO = """
+    select id from public.videos
+    where id = %s::uuid and participant_id = %s::uuid and deleted_at is null
+    for update
+"""
+
+_MARK_OPENED = """
+    update public.videos
+    set first_opened_at = coalesce(first_opened_at, now()),
+        last_opened_at = now(),
+        open_count = open_count + 1
+    where id = %s::uuid
+"""
+
+_SOFT_DELETE = """
+    update public.videos
+    set deleted_at = now()
+    where id = %s::uuid and participant_id = %s::uuid and deleted_at is null
+    returning id
 """
 
 _FULL_ONLY_FIELDS = {"category_id"}
@@ -195,3 +217,78 @@ def retry_video(
     if current["processing_status"] == "PROCESSING":
         return _present(current, condition)
     raise HTTPException(status_code=409, detail={"code": "NOT_RETRYABLE"})
+
+class OpenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")
+    source_block: Literal[
+        "CHRONOLOGICAL_LIST", "RECENT", "FORGOTTEN", "CATEGORY_TREE", "SEARCH", "SAVE_RESULT"
+    ]
+    device_type: Literal["ANDROID", "IOS", "DESKTOP", "OTHER"] | None = None
+    external: bool = False
+
+
+class DeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")
+    device_type: Literal["ANDROID", "IOS", "DESKTOP", "OTHER"] | None = None
+
+
+@router.post("/videos/{video_id}/open")
+def open_video(
+    video_id: uuid.UUID,
+    body: OpenRequest,
+    participant: dict = Depends(get_active_participant),
+    conn=Depends(get_conn),
+):
+    condition = _current_condition(conn, participant["id"])
+    event_type = "EXTERNAL_OPEN" if body.external else "OPENED"
+
+    with conn.transaction():
+        locked = conn.execute(_LOCK_VIDEO, (video_id, participant["id"])).fetchone()
+        if locked is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        session_id = touch_session(conn, participant["id"], condition)
+        inserted = record_event(
+            conn,
+            participant_id=participant["id"],
+            condition=condition,
+            event_type=event_type,
+            idempotency_key=body.idempotency_key,
+            video_id=str(video_id),
+            device_type=body.device_type,
+            session_id=session_id,
+            source_block=body.source_block,
+        )
+        if inserted and not body.external:
+            conn.execute(_MARK_OPENED, (video_id,))
+
+    return {"recorded": inserted, "event_type": event_type}
+
+
+@router.delete("/videos/{video_id}")
+def delete_video(
+    video_id: uuid.UUID,
+    body: DeleteRequest,
+    participant: dict = Depends(get_active_participant),
+    conn=Depends(get_conn),
+):
+    condition = _current_condition(conn, participant["id"])
+
+    with conn.transaction():
+        deleted = conn.execute(_SOFT_DELETE, (video_id, participant["id"])).fetchone()
+        if deleted is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        session_id = touch_session(conn, participant["id"], condition)
+        record_event(
+            conn,
+            participant_id=participant["id"],
+            condition=condition,
+            event_type="DELETED",
+            idempotency_key=body.idempotency_key,
+            video_id=str(video_id),
+            device_type=body.device_type,
+            session_id=session_id,
+        )
+
+    return Response(status_code=204)

@@ -10,6 +10,97 @@ VIDEO_ID = "33333333-3333-3333-3333-333333333333"
 CATEGORY_ID = "44444444-4444-4444-4444-444444444444"
 BASIC = {"condition": "BASIC", "valid_from": "2026-10-13T00:00:00Z"}
 FULL = {"condition": "FULL", "valid_from": "2026-11-10T00:00:00Z"}
+OPEN_BODY = {"idempotency_key": "open-00000001", "source_block": "CHRONOLOGICAL_LIST"}
+SESSION = {"id": "99999999-9999-9999-9999-999999999999", "active": True}
+
+
+def test_open_requires_token(client):
+    assert client.post(f"/api/videos/{VIDEO_ID}/open", json=OPEN_BODY).status_code == 401
+
+
+def test_open_records_event_and_updates_counters(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, {"id": VIDEO_ID}, SESSION, {"id": "e1"}]
+    r = client.post(f"/api/videos/{VIDEO_ID}/open", json=OPEN_BODY, headers=bearer(make_token()))
+    assert r.status_code == 200
+    assert r.json() == {"recorded": True, "event_type": "OPENED"}
+    (event,) = sql_calls(fake_db, "insert into public.interaction_events")
+    assert event[1][2] == "OPENED"
+    assert event[1][6] == "open-00000001"
+    assert event[1][10] == "CHRONOLOGICAL_LIST"
+    assert len(sql_calls(fake_db, "open_count = open_count + 1")) == 1
+
+
+def test_duplicate_open_does_not_touch_counters(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, {"id": VIDEO_ID}, SESSION, None]
+    r = client.post(f"/api/videos/{VIDEO_ID}/open", json=OPEN_BODY, headers=bearer(make_token()))
+    assert r.status_code == 200
+    assert r.json()["recorded"] is False
+    assert sql_calls(fake_db, "open_count = open_count + 1") == []
+
+
+def test_external_open_logs_separately_and_skips_counters(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, {"id": VIDEO_ID}, SESSION, {"id": "e1"}]
+    r = client.post(
+        f"/api/videos/{VIDEO_ID}/open",
+        json={**OPEN_BODY, "external": True},
+        headers=bearer(make_token()),
+    )
+    assert r.status_code == 200
+    assert r.json() == {"recorded": True, "event_type": "EXTERNAL_OPEN"}
+    (event,) = sql_calls(fake_db, "insert into public.interaction_events")
+    assert event[1][2] == "EXTERNAL_OPEN"
+    assert sql_calls(fake_db, "open_count = open_count + 1") == []
+
+
+def test_open_foreign_or_missing_item_is_404(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, None]
+    r = client.post(f"/api/videos/{VIDEO_ID}/open", json=OPEN_BODY, headers=bearer(make_token()))
+    assert r.status_code == 404
+    assert sql_calls(fake_db, "insert into public.interaction_events") == []
+
+
+def test_open_rejects_bad_body(client, make_token):
+    h = bearer(make_token())
+    assert client.post(f"/api/videos/{VIDEO_ID}/open", json={"idempotency_key": "short", "source_block": "SEARCH"}, headers=h).status_code == 422
+    assert client.post(f"/api/videos/{VIDEO_ID}/open", json={**OPEN_BODY, "source_block": "NOPE"}, headers=h).status_code == 422
+    assert client.post(f"/api/videos/{VIDEO_ID}/open", json={**OPEN_BODY, "participant_id": "x"}, headers=h).status_code == 422
+
+
+def test_open_by_withdrawn_participant_is_403(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT, status="WITHDRAWN")]
+    r = client.post(f"/api/videos/{VIDEO_ID}/open", json=OPEN_BODY, headers=bearer(make_token()))
+    assert r.status_code == 403
+
+
+DELETE_BODY = {"idempotency_key": "del-00000001"}
+
+
+def test_delete_requires_token(client):
+    assert client.request("DELETE", f"/api/videos/{VIDEO_ID}", json=DELETE_BODY).status_code == 401
+
+
+def test_delete_soft_deletes_and_logs_event(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, {"id": VIDEO_ID}, SESSION, {"id": "e1"}]
+    r = client.request("DELETE", f"/api/videos/{VIDEO_ID}", json=DELETE_BODY, headers=bearer(make_token()))
+    assert r.status_code == 204
+    (soft,) = sql_calls(fake_db, "set deleted_at = now()")
+    assert (str(soft[1][0]), soft[1][1]) == (VIDEO_ID, PID)
+    (event,) = sql_calls(fake_db, "insert into public.interaction_events")
+    assert event[1][2] == "DELETED"
+    assert event[1][6] == "del-00000001"
+
+
+def test_delete_missing_or_already_deleted_is_404_without_event(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, None]
+    r = client.request("DELETE", f"/api/videos/{VIDEO_ID}", json=DELETE_BODY, headers=bearer(make_token()))
+    assert r.status_code == 404
+    assert sql_calls(fake_db, "insert into public.interaction_events") == []
+
+
+def test_delete_by_withdrawn_participant_is_403(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT, status="WITHDRAWN")]
+    r = client.request("DELETE", f"/api/videos/{VIDEO_ID}", json=DELETE_BODY, headers=bearer(make_token()))
+    assert r.status_code == 403
 
 
 def video_row(**overrides):
