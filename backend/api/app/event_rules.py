@@ -15,12 +15,14 @@ REASON_EVENT_TYPES = frozenset({
     "REASON_PROMPT_DISMISSED",
 })
 
+VIDEO_EVENT_TYPES = frozenset({"EMBED_FAILED"})
+
 CLIENT_EVENT_TYPES = frozenset({
     "DASHBOARD_VIEWED",
     "RECENT_BLOCK_IMPRESSION",
     "FORGOTTEN_BLOCK_IMPRESSION",
     "CATEGORY_TREE_IMPRESSION",
-}) | CATEGORY_EVENT_TYPES | REASON_EVENT_TYPES
+}) | CATEGORY_EVENT_TYPES | REASON_EVENT_TYPES | VIDEO_EVENT_TYPES
 
 REASON_CONTEXTS = frozenset({"SAVE_REASON", "NEVER_OPENED_REASON", "NOT_REVISITED_REASON"})
 REASON_KEYS = frozenset({"reason_context", "prompt_version", "codebook_version"})
@@ -78,6 +80,8 @@ def validate_event(event_type, video_id, payload, condition):
             raise EventRejected("NOT_ALLOWED_IN_CONDITION")
         if video_id is None:
             raise EventRejected("VIDEO_REQUIRED")
+    if event_type in VIDEO_EVENT_TYPES and video_id is None:
+        raise EventRejected("VIDEO_REQUIRED")
     return validate_payload(event_type, payload)
 
 

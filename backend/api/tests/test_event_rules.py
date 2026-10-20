@@ -11,7 +11,7 @@ NOW = datetime(2026, 10, 16, 6, 0, tzinfo=timezone.utc)
 
 SERVER_ONLY = [
     "SAVED", "SAVE_REJECTED", "PROCESSING_COMPLETED", "PROCESSING_FAILED",
-    "OPENED", "EXTERNAL_OPEN", "EMBED_FAILED", "DELETED",
+    "OPENED", "EXTERNAL_OPEN", "DELETED",
     "CONSENT_ACCEPTED", "CONSENT_DECLINED", "SURVEY_STARTED", "SURVEY_SUBMITTED",
     "WITHDRAWAL_REQUESTED", "REASON_RESPONSE_SUBMITTED", "NOT_A_REAL_EVENT",
 ]
@@ -24,7 +24,7 @@ def code_of(*args):
 
 
 def test_client_types_are_exactly_the_approved_list():
-    assert len(CLIENT_EVENT_TYPES) == 12
+    assert len(CLIENT_EVENT_TYPES) == 13
 
 
 @pytest.mark.parametrize("event_type", SERVER_ONLY)
@@ -102,3 +102,16 @@ def test_timestamp_outside_the_window_is_dropped():
 def test_missing_or_naive_timestamp_is_dropped():
     assert resolve_occurred_at(None, NOW) is None
     assert resolve_occurred_at(datetime(2026, 10, 16, 5, 59), NOW) is None
+
+
+@pytest.mark.parametrize("condition", ["BASIC", "FULL"])
+def test_embed_failed_is_allowed_with_an_item_in_any_condition(condition):
+    assert validate_event("EMBED_FAILED", VIDEO, {}, condition) == {}
+
+
+def test_embed_failed_needs_an_item():
+    assert code_of("EMBED_FAILED", None, {}, "BASIC") == "VIDEO_REQUIRED"
+
+
+def test_embed_failed_payload_must_be_empty():
+    assert code_of("EMBED_FAILED", VIDEO, {"x": 1}, "BASIC") == "INVALID_PAYLOAD"

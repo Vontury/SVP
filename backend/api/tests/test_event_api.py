@@ -154,3 +154,11 @@ def test_batch_without_active_condition_is_409(client, make_token, fake_db):
     fake_db.queue = [dict(SAMPLE_PARTICIPANT), None]
     assert post(client, make_token, [ev()]).status_code == 409
     assert sql_calls(fake_db, "insert into public.interaction_events") == []
+
+
+def test_embed_failed_in_basic_for_an_owned_item_is_recorded(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC, ACTIVE_SESSION, {"id": "e1"}]
+    fake_db.all_rows = [{"id": VIDEO_ID}]
+    r = post(client, make_token, [ev("EMBED_FAILED", video_id=VIDEO_ID)])
+    assert r.status_code == 200
+    assert r.json() == {"accepted": 1, "duplicates": 0}

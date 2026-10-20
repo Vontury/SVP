@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from fastapi.staticfiles import StaticFiles
 import asyncio
 from contextlib import asynccontextmanager, suppress
 from fastapi import Depends, FastAPI
@@ -41,3 +44,8 @@ def health_db(conn=Depends(get_conn, scope="function")):
 @app.get("/api/me")
 def me(participant: dict = Depends(get_current_participant)):
     return participant
+
+FRONTEND_DIR = Path(__file__).resolve().parents[3] / "frontend"
+
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
