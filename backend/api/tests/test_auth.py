@@ -65,3 +65,12 @@ def test_hs256_token_is_rejected(client):
         algorithm="HS256",
     )
     assert client.get("/api/me", headers=bearer(token)).status_code == 401
+
+def test_small_clock_skew_is_tolerated(client, make_token):
+    token = make_token(iat=int(time.time()) + 5)
+    assert client.get("/api/me", headers=bearer(token)).status_code == 200
+
+
+def test_large_clock_skew_is_rejected(client, make_token):
+    token = make_token(iat=int(time.time()) + 300)
+    assert client.get("/api/me", headers=bearer(token)).status_code == 401

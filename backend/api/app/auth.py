@@ -45,9 +45,10 @@ def get_current_user(
         claims = jwt.decode(
             token,
             signing_key.key,
-            algorithms=["ES256"], 
+            algorithms=["ES256"],
             audience="authenticated",
             issuer=settings.jwt_issuer,
+            leeway=10,
             options={"require": ["exp", "sub", "iss", "aud"]},
         )
     except jwt.PyJWTError as exc:
