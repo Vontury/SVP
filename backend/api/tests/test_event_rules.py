@@ -6,14 +6,16 @@ from app.event_rules import CLIENT_EVENT_TYPES, EventRejected, resolve_occurred_
 
 CATEGORY = "44444444-4444-4444-4444-444444444444"
 VIDEO = "33333333-3333-3333-3333-333333333333"
-REASON = {"reason_context": "SAVE_REASON", "prompt_version": "p1", "codebook_version": "c1"}
 NOW = datetime(2026, 10, 16, 6, 0, tzinfo=timezone.utc)
 
-SERVER_ONLY = [
+NOT_ALLOWED = [
     "SAVED", "SAVE_REJECTED", "PROCESSING_COMPLETED", "PROCESSING_FAILED",
     "OPENED", "EXTERNAL_OPEN", "DELETED",
     "CONSENT_ACCEPTED", "CONSENT_DECLINED", "SURVEY_STARTED", "SURVEY_SUBMITTED",
-    "WITHDRAWAL_REQUESTED", "REASON_RESPONSE_SUBMITTED", "NOT_A_REAL_EVENT",
+    "WITHDRAWAL_REQUESTED",
+    "REASON_BUTTON_DISPLAYED", "REASON_BUTTON_CLICKED", "REASON_PROMPT_OPENED",
+    "REASON_PROMPT_DISMISSED", "REASON_RESPONSE_SUBMITTED",
+    "NOT_A_REAL_EVENT",
 ]
 
 
@@ -24,11 +26,11 @@ def code_of(*args):
 
 
 def test_client_types_are_exactly_the_approved_list():
-    assert len(CLIENT_EVENT_TYPES) == 13
+    assert len(CLIENT_EVENT_TYPES) == 9
 
 
-@pytest.mark.parametrize("event_type", SERVER_ONLY)
-def test_server_only_types_are_rejected(event_type):
+@pytest.mark.parametrize("event_type", NOT_ALLOWED)
+def test_other_types_are_rejected(event_type):
     assert code_of(event_type, None, {}, "FULL") == "EVENT_TYPE_NOT_ALLOWED"
 
 
@@ -57,35 +59,6 @@ def test_category_events_need_a_valid_category_id_and_nothing_else(event_type):
     assert code_of(event_type, None, {}, "FULL") == "INVALID_PAYLOAD"
     assert code_of(event_type, None, {"category_id": "nope"}, "FULL") == "INVALID_PAYLOAD"
     assert code_of(event_type, None, {"category_id": CATEGORY, "x": 1}, "FULL") == "INVALID_PAYLOAD"
-
-
-@pytest.mark.parametrize(
-    "event_type",
-    [
-        "REASON_BUTTON_DISPLAYED",
-        "REASON_BUTTON_CLICKED",
-        "REASON_PROMPT_OPENED",
-        "REASON_PROMPT_DISMISSED",
-    ],
-)
-def test_reason_events_are_allowed_in_full_with_an_item(event_type):
-    assert validate_event(event_type, VIDEO, dict(REASON), "FULL") == REASON
-
-
-def test_reason_events_are_rejected_in_basic():
-    assert code_of("REASON_BUTTON_CLICKED", VIDEO, dict(REASON), "BASIC") == "NOT_ALLOWED_IN_CONDITION"
-
-
-def test_reason_events_need_an_item():
-    assert code_of("REASON_BUTTON_CLICKED", None, dict(REASON), "FULL") == "VIDEO_REQUIRED"
-
-
-def test_reason_payload_is_strict():
-    assert code_of("REASON_BUTTON_CLICKED", VIDEO, {}, "FULL") == "INVALID_PAYLOAD"
-    assert code_of("REASON_BUTTON_CLICKED", VIDEO, {**REASON, "note": "free text"}, "FULL") == "INVALID_PAYLOAD"
-    assert code_of("REASON_BUTTON_CLICKED", VIDEO, {**REASON, "reason_context": "OTHER"}, "FULL") == "INVALID_PAYLOAD"
-    assert code_of("REASON_BUTTON_CLICKED", VIDEO, {**REASON, "prompt_version": "a b"}, "FULL") == "INVALID_PAYLOAD"
-    assert code_of("REASON_BUTTON_CLICKED", VIDEO, {**REASON, "codebook_version": 5}, "FULL") == "INVALID_PAYLOAD"
 
 
 def test_timestamp_inside_the_window_is_kept():

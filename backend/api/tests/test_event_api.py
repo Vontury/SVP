@@ -10,8 +10,6 @@ SESSION_ID = "99999999-9999-9999-9999-999999999999"
 BASIC = {"condition": "BASIC", "valid_from": "2026-10-13T00:00:00Z"}
 FULL = {"condition": "FULL", "valid_from": "2026-11-10T00:00:00Z"}
 ACTIVE_SESSION = {"id": SESSION_ID, "active": True}
-REASON = {"reason_context": "SAVE_REASON", "prompt_version": "p1", "codebook_version": "c1"}
-
 
 def bearer(token):
     return {"Authorization": f"Bearer {token}"}
@@ -73,36 +71,21 @@ def test_server_only_event_type_rejects_the_whole_batch(client, make_token, fake
     assert sql_calls(fake_db, "public.app_sessions") == []
 
 
-def test_reason_event_in_basic_is_rejected(client, make_token, fake_db):
-    fake_db.queue = [dict(SAMPLE_PARTICIPANT), BASIC]
-    r = post(client, make_token, [ev("REASON_BUTTON_CLICKED", video_id=VIDEO_ID, payload=dict(REASON))])
+def test_reason_event_types_are_rejected(client, make_token, fake_db):
+    fake_db.queue = [dict(SAMPLE_PARTICIPANT), FULL]
+    r = post(client, make_token, [ev("REASON_BUTTON_CLICKED", video_id=VIDEO_ID)])
     assert r.status_code == 422
-    assert r.json() == {"detail": {"code": "NOT_ALLOWED_IN_CONDITION", "index": 0}}
+    assert r.json() == {"detail": {"code": "EVENT_TYPE_NOT_ALLOWED", "index": 0}}
     assert sql_calls(fake_db, "insert into public.interaction_events") == []
-
-
-def test_reason_event_in_full_for_an_owned_item_is_recorded(client, make_token, fake_db):
-    fake_db.queue = [dict(SAMPLE_PARTICIPANT), FULL, ACTIVE_SESSION, {"id": "e1"}]
-    fake_db.all_rows = [{"id": VIDEO_ID}]
-    r = post(client, make_token, [ev("REASON_PROMPT_OPENED", video_id=VIDEO_ID, payload=dict(REASON))])
-    assert r.status_code == 200
-    assert r.json() == {"accepted": 1, "duplicates": 0}
-    (insert,) = sql_calls(fake_db, "insert into public.interaction_events")
-    assert insert[1][1] == VIDEO_ID
-    assert insert[1][5] == "FULL"
-    assert json.loads(insert[1][7]) == REASON
-    (owner,) = sql_calls(fake_db, "id = any(%s::uuid[])")
-    assert owner[1] == (PID, [VIDEO_ID])
 
 
 def test_item_owned_by_someone_else_is_rejected(client, make_token, fake_db):
     fake_db.queue = [dict(SAMPLE_PARTICIPANT), FULL]
     fake_db.all_rows = []
-    r = post(client, make_token, [ev("REASON_BUTTON_CLICKED", video_id=VIDEO_ID, payload=dict(REASON))])
+    r = post(client, make_token, [ev("EMBED_FAILED", video_id=VIDEO_ID)])
     assert r.status_code == 422
     assert r.json() == {"detail": {"code": "VIDEO_NOT_FOUND", "index": 0}}
     assert sql_calls(fake_db, "insert into public.interaction_events") == []
-
 
 def test_client_cannot_supply_identity_or_condition(client, make_token, fake_db):
     fake_db.queue = [dict(SAMPLE_PARTICIPANT)]

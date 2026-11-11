@@ -186,15 +186,10 @@ check("a server-only event type rejects the whole batch",
       r.status_code == 422 and r.json() == {"detail": {"code": "EVENT_TYPE_NOT_ALLOWED", "index": 1}}, r.text[:120])
 check("nothing from the rejected batch was stored", count_by_key(pid_a, "rj0") == 0 and count_by_key(pid_a, "rj1") == 0)
 
-reason_payload = {"reason_context": "SAVE_REASON", "prompt_version": "p1", "codebook_version": "c1"}
-if users["A"]["condition"] == "BASIC":
-    r = batch(ta, [ev("REASON_BUTTON_CLICKED", "rs1", video_id=vid_a, payload=reason_payload)])
-    check("A (BASIC): REASON events are rejected",
-          r.status_code == 422 and r.json() == {"detail": {"code": "NOT_ALLOWED_IN_CONDITION", "index": 0}}, r.text[:120])
-    check("A (BASIC): no REASON event stored", count_by_key(pid_a, "rs1") == 0)
-else:
-    r = batch(ta, [ev("REASON_BUTTON_CLICKED", "rs1", video_id=vid_a, payload=reason_payload)])
-    check("A (FULL): REASON events are accepted", r.status_code == 200 and r.json()["accepted"] == 1, r.text[:120])
+r = batch(ta, [ev("REASON_BUTTON_CLICKED", "rs1", video_id=vid_a)])
+check("REASON events are no longer accepted",
+      r.status_code == 422 and r.json() == {"detail": {"code": "EVENT_TYPE_NOT_ALLOWED", "index": 0}}, r.text[:120])
+check("no REASON event stored", count_by_key(pid_a, "rs1") == 0)
 
 r = batch(ta, [ev("DASHBOARD_VIEWED", "fv1", video_id=vid_b)])
 check("A cannot attach events to B's item",
